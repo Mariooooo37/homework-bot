@@ -34,6 +34,7 @@ HOMEWORK_VERDICTS = {
 
 class BotException(Exception):
     """Вызов исключения, если в боте ошибка уровня error и выше."""
+
     pass
 
 
@@ -60,14 +61,13 @@ def get_api_answer(timestamp):
         response = requests.get(
             ENDPOINT, headers=HEADERS, params={'from_date': timestamp})
     except requests.exceptions.RequestException:
-            logger.error('Ошибка при запросе к API.')
-            raise BotException('Ошибка при запросе к API.')
+        logger.error('Ошибка при запросе к API.')
+        raise BotException('Ошибка при запросе к API.')
     if response.status_code != 200:
         logger.error('Статус код ответа API отличен от 200.')
         raise BotException('Статус код ответа API отличен от 200.')
     response = response.json()
     return response
-
 
 
 def check_response(response):
@@ -122,7 +122,7 @@ def main():
                 logger.critical(message)
                 time.sleep(RETRY_PERIOD)
                 if SUM_ATTEMPTS_SEND_MESSEAGE_IN_TG == 0:
-                    bot.send_message(chat_id=TELEGRAM_CHAT_ID,text=message)
+                    bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
                     SUM_ATTEMPTS_SEND_MESSEAGE_IN_TG += 1
         break
 
