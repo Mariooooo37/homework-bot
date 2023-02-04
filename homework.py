@@ -107,6 +107,7 @@ def main():
     timestamp = int(time.time())
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
     SUM_ATTEMPTS_SEND_MESSEAGE_IN_TG = 0
+
     while True:
         if check_tokens():
             try:
@@ -124,7 +125,13 @@ def main():
                 if SUM_ATTEMPTS_SEND_MESSEAGE_IN_TG == 0:
                     bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
                     SUM_ATTEMPTS_SEND_MESSEAGE_IN_TG += 1
-        break
+        # тут я в первом коммите делал без else, но тогда срабатывает break
+        # сразу после цикла. Не подскажешь почему? Мы же можем просто писать:
+        # if check_tokens():
+        #   ...
+        # break
+        else:
+            break
 
 
 if __name__ == '__main__':
