@@ -2,12 +2,12 @@ import logging
 import os
 import sys
 import time
-from typing import Any
+from typing import Any, Union
+from http import HTTPStatus
 
 import requests
 import telegram
 from dotenv import load_dotenv
-from http import HTTPStatus
 
 load_dotenv()
 PRACTICUM_TOKEN = os.getenv('YA_TOKEN')
@@ -42,7 +42,7 @@ class BotException(Exception):
 def check_tokens() -> bool:
     """Проверка переменных окружения."""
     if all((PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID)):
-        return True
+        return all((PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID))
     else:
         return False
 
@@ -71,7 +71,7 @@ def get_api_answer(timestamp: int) -> dict:
     return response.json()
 
 
-def check_response(response: dict) -> dict:
+def check_response(response: dict) -> Union[dict, None]:
     """Проверка ответа API."""
     if not isinstance(response, dict):
         logger.error('Ответ API не является словарем.')
@@ -79,9 +79,8 @@ def check_response(response: dict) -> dict:
     elif not isinstance(response.get('homeworks'), list):
         logger.error('Ответ API получен не в списке.')
         raise TypeError('Ответ API получен не в списке.')
-    elif response.get('homeworks') != []:
-        result = response.get('homeworks')[0]
-        return result
+    elif response.get('homeworks'):
+        return response.get('homeworks')[0]
     logger.debug('Отсутствие в ответе API новых статусов домашней работы.')
 
 
@@ -107,6 +106,7 @@ def main() -> None:
     """Основная логика работы бота."""
     timestamp = int(time.time())
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
+    status_now = ''
     error_send_message_in_tg = []
     if not check_tokens():
         logger.critical('Ошибка в переменных окружения.')
@@ -114,29 +114,31 @@ def main() -> None:
     while True:
         try:
             api_answer = get_api_answer(timestamp)
-            timestamp = api_answer.get('current_date')
-            # добавил изменение переменной timestamp, по логике он время
-            # первого запроса оставит изначальным, а начиная со 2 запроса
-            # будет его менять на предыдущий. Тогда мы избежим повторов статуса
-            # или лучше делать проверку что прошлый статус != новому?
             homework = check_response(api_answer)
             if homework is not None:
-                status = parse_status(homework)
-                send_message(bot, status)
-            # Все, понял, try будет пытаться выполнить весь код в своем блоке
-            # не смотря на условие, как и с break в конце если без else
-            time.sleep(RETRY_PERIOD)
-        except BotException as error:
-            # У меня же как получается, что BotException наследует
-            # Exception. А где перехваты исключений, не входящих в Exception
-            # там я делаю raise BotException, т.е. по идее сюда должны все
-            # исключения прилетать
+                if homework.get('status') != status_now:
+                    status_now = homework.get('status')
+                    status = parse_status(homework)
+                    send_message(bot, status)
+        except (BotException, TypeError) as error:
+            # Я если честно думал, что если я наследую BotException от
+            # Exception, то TypeError сюда попадет, т.к. она входит в
+            # иерархию Exception
             message = f'Сбой в работе программы: {error}'
             logger.critical(message)
+            if str(error) not in error_send_message_in_tg:
+                # В задании просят, чтобы сообщение об ошибке в телеграм
+                # отправлялось 1 раз только, а логировалось постоянно.
+                # Поэтому я создаю пустой список, добавляю в него ошибки,
+                # которые уже отправлялись в телеграм при этом их нет в этом
+                # списке, т.е. они новые и еще не отправлялись в телеграм
+                try:
+                    bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
+                except telegram.error.TelegramError:
+                    logger.error('Сбой в отправке сообщения об ошибке')
+                error_send_message_in_tg.append(str(error))
+        finally:
             time.sleep(RETRY_PERIOD)
-            if error not in error_send_message_in_tg:
-                bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
-                error_send_message_in_tg.append(error)
 
 
 if __name__ == '__main__':
