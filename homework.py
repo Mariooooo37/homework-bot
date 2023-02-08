@@ -89,7 +89,7 @@ def parse_status(homework: dict) -> str:
 
 def main() -> None:
     """Основная логика работы бота."""
-    timestamp = 0
+    timestamp = int(time.time())
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
     status_now = ''
     error_send_message_in_tg = []
