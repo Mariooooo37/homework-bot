@@ -69,10 +69,13 @@ def check_response(response: dict) -> dict:
     """Проверка ответа API."""
     if not isinstance(response, dict):
         raise TypeError('Ответ API не является словарем.')
-    homework = response.get('homeworks')
-    if not isinstance(homework, list):
+    homeworks = response.get('homeworks')
+    if not isinstance(homeworks, list):
         raise TypeError('Ответ API получен не в списке.')
-    return homework[0]
+    try:
+        return homeworks[0]
+    except IndexError:
+        raise BotException('Нет домашних работ на проверке')
 
 
 def parse_status(homework: dict) -> str:
