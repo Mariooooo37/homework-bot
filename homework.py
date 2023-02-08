@@ -2,7 +2,6 @@ import logging
 import os
 import sys
 import time
-from typing import Any, Union
 from http import HTTPStatus
 
 import requests
@@ -41,13 +40,10 @@ class BotException(Exception):
 
 def check_tokens() -> bool:
     """Проверка переменных окружения."""
-    if all((PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID)):
-        return all((PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID))
-    else:
-        return False
+    return all((PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID))
 
 
-def send_message(bot: Any, message: str) -> None:
+def send_message(bot: telegram.Bot, message: str) -> None:
     """Отправка сообщения ботом в телеграм."""
     try:
         bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
@@ -63,48 +59,37 @@ def get_api_answer(timestamp: int) -> dict:
         response = requests.get(
             ENDPOINT, headers=HEADERS, params={'from_date': timestamp})
     except requests.exceptions.RequestException:
-        logger.error('Ошибка при запросе к API.')
         raise BotException('Ошибка при запросе к API.')
     if response.status_code != HTTPStatus.OK:
-        logger.error('Статус код ответа API отличен от 200.')
         raise BotException('Статус код ответа API отличен от 200.')
     return response.json()
 
 
-def check_response(response: dict) -> Union[dict, None]:
+def check_response(response: dict) -> dict:
     """Проверка ответа API."""
     if not isinstance(response, dict):
-        logger.error('Ответ API не является словарем.')
         raise TypeError('Ответ API не является словарем.')
-    elif not isinstance(response.get('homeworks'), list):
-        logger.error('Ответ API получен не в списке.')
+    homework = response.get('homeworks')
+    if not isinstance(homework, list):
         raise TypeError('Ответ API получен не в списке.')
-    elif response.get('homeworks'):
-        return response.get('homeworks')[0]
-    logger.debug('Отсутствие в ответе API новых статусов домашней работы.')
+    return homework[0]
 
 
 def parse_status(homework: dict) -> str:
     """Проверка статуса домашней работы."""
-    if 'homework_name' not in homework:
-        logger.error('Нет ключа homework_name в ответе API.')
-        raise BotException('Нет ключа homework_name в ответе API.')
-    if 'status' not in homework:
-        logger.error('Нет ключа status в ответе API.')
-        raise BotException('Нет ключа status в ответе API.')
     homework_name = homework.get('homework_name')
-    status = homework.get('status')
-    if status not in HOMEWORK_VERDICTS:
-        logger.error('Нет ключа status в ожидаемом словаре.')
-        raise BotException('Нет ключа status в ожидаемом словаре.')
-    verdict = HOMEWORK_VERDICTS[status]
+    verdict = HOMEWORK_VERDICTS.get(homework.get('status'))
+    if not homework_name:
+        raise BotException('Ошибка запроса по ключу homework_name.')
+    if not verdict:
+        raise BotException('Нет корректного ключа status.')
     logger.info(f'Изменился статус работы "{homework_name}".{verdict}')
-    return f'Изменился статус проверки работы "{homework_name}".{verdict}'
+    return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
 def main() -> None:
     """Основная логика работы бота."""
-    timestamp = int(time.time())
+    timestamp = 0
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
     status_now = ''
     error_send_message_in_tg = []
@@ -115,25 +100,18 @@ def main() -> None:
         try:
             api_answer = get_api_answer(timestamp)
             homework = check_response(api_answer)
-            if homework is not None:
-                if homework.get('status') != status_now:
-                    status_now = homework.get('status')
-                    status = parse_status(homework)
-                    send_message(bot, status)
+            if homework.get('status') != status_now:
+                status_now = homework.get('status')
+                status = parse_status(homework)
+                send_message(bot, status)
+            else:
+                logger.debug('Статус домашней работы не изменился')
         except (BotException, TypeError) as error:
-            # Я если честно думал, что если я наследую BotException от
-            # Exception, то TypeError сюда попадет, т.к. она входит в
-            # иерархию Exception
             message = f'Сбой в работе программы: {error}'
             logger.critical(message)
             if str(error) not in error_send_message_in_tg:
-                # В задании просят, чтобы сообщение об ошибке в телеграм
-                # отправлялось 1 раз только, а логировалось постоянно.
-                # Поэтому я создаю пустой список, добавляю в него ошибки,
-                # которые уже отправлялись в телеграм при этом их нет в этом
-                # списке, т.е. они новые и еще не отправлялись в телеграм
                 try:
-                    bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
+                    send_message(bot, message)
                 except telegram.error.TelegramError:
                     logger.error('Сбой в отправке сообщения об ошибке')
                 error_send_message_in_tg.append(str(error))
