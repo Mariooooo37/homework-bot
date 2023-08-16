@@ -18,7 +18,7 @@ git clone https://github.com/Mariooooo37/homework-bot
 ```
 
 ```
-cd homework_bot
+cd homework-bot
 ```
 
 Cоздать и активировать виртуальное окружение:
