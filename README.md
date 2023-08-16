@@ -14,7 +14,7 @@
 Клонировать репозиторий и перейти в него в командной строке:
 
 ```
-git clone https://github.com/Mariooooo37/homework_bot
+git clone https://github.com/Mariooooo37/homework-bot
 ```
 
 ```
